@@ -1,8 +1,8 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import numpy as np
-from PIL import Image
 import matplotlib.pyplot as plt
+from image_processor import ImageProcessor
 
 HEADER_BYTES = 4
 def encode_message_bits(message: str) -> np.ndarray:
@@ -24,8 +24,7 @@ def decode_message_bits(bit_stream: np.ndarray) -> str:
     return np.packbits(payload_bits).tobytes().decode("utf-8")
 
 def encrypt_message(state: dict) -> None:
-    original_array = state["original_array"]
-    if original_array is None:
+    if state["image_path"] is None:
         messagebox.showwarning("No Image", "Please load a cover image first.")
         return
 
@@ -35,6 +34,11 @@ def encrypt_message(state: dict) -> None:
         return
 
     try:
+        processor = ImageProcessor(state["image_path"])
+        processor.load_image()
+        img = processor.get_image()
+        original_array = np.array(img, dtype=np.uint8)
+
         bits = encode_message_bits(message)
         encrypted = original_array.copy()
         red_flat = encrypted[:, :, 0].reshape(-1)
@@ -43,12 +47,13 @@ def encrypt_message(state: dict) -> None:
             raise ValueError("Message is too long for this image size.")
 
         red_flat[: bits.size] = (red_flat[: bits.size] & 0xFE) | bits
+
         state["encrypted_array"] = encrypted
-        state["status_var"].set(f"Encrypted {len(message.encode('utf-8'))} bytes into image.")
-    except ValueError as exc:
-        messagebox.showerror("Encryption Error", str(exc))
+        state["status_var"].set("Message encrypted and saved as encrypted.png")
+
     except Exception as exc:
-        messagebox.showerror("Encryption Error", f"Could not encrypt message:\n{exc}")
+        messagebox.showerror("Encryption Error", str(exc))
+
 
 def decrypt_from_image(state: dict) -> None:
     image_path = filedialog.askopenfilename(
@@ -59,14 +64,17 @@ def decrypt_from_image(state: dict) -> None:
         return
 
     try:
-        with Image.open(image_path) as img:
-            arr = np.array(img.convert("RGB"), dtype=np.uint8)
-
+        processor = ImageProcessor(image_path)
+        processor.load_image()
+        
+        img = processor.get_image()
+        arr = np.array(img, dtype=np.uint8)
         red_bits = (arr[:, :, 0].reshape(-1) & 1).astype(np.uint8)
         decoded_message = decode_message_bits(red_bits)
 
         state["message_box"].delete("1.0", "end")
         state["message_box"].insert("1.0", decoded_message)
-        state["status_var"].set(f"Message decrypted from: {image_path}")
+        state["status_var"].set("Message decrypted successfully")
+
     except Exception as exc:
-        messagebox.showerror("Decryption Error", f"Could not decrypt message:\n{exc}")
+        messagebox.showerror("Decryption Error", str(exc))
