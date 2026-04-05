@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import numpy as np
 from PIL import Image, ImageTk
+import matplotlib.pyplot as plt
 
 HEADER_BYTES = 4
 
@@ -97,7 +98,6 @@ def encrypt_message(state: dict):
         bits = encode_message_bits(message)
         encrypted = original_array.copy()
 
-        # NumPy slicing focus: only Red channel is used for LSB storage.
         red_flat = encrypted[:, :, 0].reshape(-1)
 
         if bits.size > red_flat.size:
@@ -164,6 +164,36 @@ def decrypt_from_image(state: dict):
         messagebox.showerror("Decryption Error", f"Could not decrypt message:\n{exc}")
 
 
+def show_analysis(state: dict):
+    original_array = state["original_array"]
+    encrypted_array = state["encrypted_array"]
+
+    if original_array is None or encrypted_array is None:
+        messagebox.showwarning(
+            "Analysis Unavailable",
+            "Load a cover image and encrypt a message before visualizing analysis.",
+        )
+        return
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+    # Highlight where LSB changes happened by amplifying bit-level differences.
+    diff = np.abs(original_array.astype(float) - encrypted_array.astype(float))
+    ghost_map = np.sum(diff, axis=2) * 255
+
+    ax1.set_title("Ghost Pixel Map (Data Distribution)")
+    ax1.imshow(ghost_map, cmap="magma")
+    ax1.axis("off")
+
+    ax2.set_title("Color Integrity (Histogram)")
+    ax2.hist(original_array.flatten(), bins=50, color="blue", alpha=0.5, label="Original")
+    ax2.hist(encrypted_array.flatten(), bins=50, color="red", alpha=0.5, label="Stego")
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+
 def build_ui():
     root = tk.Tk()
     root.title("Ghost Pixel Steganography Tool")
@@ -211,6 +241,13 @@ def build_ui():
         bg="#f39c12",
         fg="white",
     ).pack(fill=tk.X, pady=4)
+    tk.Button(
+        sidebar,
+        text="5. Visualize Analysis",
+        command=lambda: show_analysis(state),
+        bg="#2980b9",
+        fg="white",
+    ).pack(fill=tk.X, pady=(14, 4))
 
     tk.Label(sidebar, text="Secret Message", fg="white", bg="#2c3e50", anchor="w").pack(
         fill=tk.X, pady=(14, 4)
